@@ -1,0 +1,55 @@
+name: Build protoc-gen-js
+
+# Builds the plugin and uploads it as a workflow artifact, so a branch can be
+# verified against real generated output before its binaries are attached to a
+# release. The release assets themselves are built by
+# build-protoc-gen-js-release-assets.yml.
+
+on:
+  push:
+    branches-ignore:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-amd64
+            runs-on: ubuntu-22.04
+            bazel_args: ""
+          - platform: darwin-arm64
+            runs-on: macos-14
+            bazel_args: "--cpu=darwin_arm64"
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build protoc-gen-js
+        run: bazel build ${{ matrix.bazel_args }} //generator:protoc-gen-js
+
+      - name: Verify protoc-gen-js binary
+        run: file bazel-bin/generator/protoc-gen-js
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp bazel-bin/generator/protoc-gen-js dist/protoc-gen-js
+          tar -C dist -czf "protoc-gen-js-${{ matrix.platform }}.tar.gz" protoc-gen-js
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: protoc-gen-js-${{ matrix.platform }}
+          path: protoc-gen-js-${{ matrix.platform }}.tar.gz
+          if-no-files-found: error
