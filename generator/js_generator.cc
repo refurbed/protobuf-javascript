@@ -2012,10 +2012,14 @@ void Generator::FindReferencedFiles(
 
 std::set<std::string> Generator::CollectExtendedFiles(
     const GeneratorOptions& options, const FileDescriptor* file) const {
+  // Note: deliberately does NOT seed referenced_files with every direct
+  // dependency. A dependency is only imported below if this file actually
+  // references one of its message types (via a field or an extension) --
+  // e.g. annotation-only imports like google/api/annotations.proto, used
+  // solely for service-method options that this generator never emits code
+  // for, are otherwise pulled in as dead imports with no corresponding
+  // exported symbol.
   std::set<std::string> referenced_files;
-  for (int i = 0; i < file->dependency_count(); i++) {
-    referenced_files.insert(std::string(file->dependency(i)->name()));
-  }
   for (int i = 0; i < file->message_type_count(); i++) {
     FindReferencedFiles(options, file->message_type(i), file,
                         &referenced_files);
