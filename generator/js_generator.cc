@@ -109,11 +109,19 @@ std::string GetJSFilename(const GeneratorOptions& options,
   return StripProto(filename) + options.GetFileNameExtension();
 }
 
+// Whether the given .proto filename is a well-known type, i.e. one whose
+// generated code is resolved from the 'google-protobuf' npm package rather than
+// emitted alongside our own output. That package ships CommonJS, so ES6 output
+// has to import those modules differently (see GenerateHeader).
+bool IsWellKnownTypeFile(const std::string& filename) {
+  return filename.find("google/protobuf") == 0;
+}
+
 // Given a filename like foo/bar/baz.proto, returns the root directory
 // path ../../
 std::string GetRootPath(const std::string& from_filename,
                         const std::string& to_filename) {
-  if (to_filename.find("google/protobuf") == 0) {
+  if (IsWellKnownTypeFile(to_filename)) {
     // Well-known types (.proto files in the google/protobuf directory) are
     // assumed to come from the 'google-protobuf' npm package.  We may want to
     // generalize this exception later by letting others put generated code in
@@ -3755,9 +3763,19 @@ void Generator::GenerateFile(const GeneratorOptions& options,
         CollectExtendedFiles(options, file);
     for (std::set<std::string>::iterator it = referenced_files.begin();
          it != referenced_files.end(); ++it) {
-      printer->Print(
-          "import * as $alias$ from '$file$';\n"
-          "goog.object.extend(proto, $alias$);\n",
+      // The well-known types resolve to the 'google-protobuf' npm package, which
+      // ships CommonJS. Those modules publish their symbols with
+      // `goog.object.extend(exports, ...)`, which Node's cjs-module-lexer cannot
+      // detect statically, so a namespace import of them yields a namespace
+      // carrying only `default` and every `$alias$.Foo` reads as undefined. The
+      // default binding maps to `module.exports` under both Node's ESM/CJS
+      // interop and bundler interop, so use it for those. Files this generator
+      // emits are real ES modules, so they keep the namespace import.
+      printer->Print(IsWellKnownTypeFile(*it)
+                         ? "import $alias$ from '$file$';\n"
+                           "goog.object.extend(proto, $alias$);\n"
+                         : "import * as $alias$ from '$file$';\n"
+                           "goog.object.extend(proto, $alias$);\n",
           "alias", ModuleAlias(*it), "file",
           GetRootPath(std::string(file->name()), *it) +
               GetJSFilename(options, *it));
