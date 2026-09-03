@@ -2026,8 +2026,17 @@ std::set<std::string> Generator::CollectExtendedFiles(
   }
   for (int i = 0; i < file->extension_count(); i++) {
     const FieldDescriptor* field = file->extension(i);
-    if (!IgnoreField(field) &&
-        field->cpp_type() == FieldDescriptor::CPPTYPE_MESSAGE &&
+    if (IgnoreField(field)) {
+      continue;
+    }
+    // The extended (containing) type's file is always referenced: extension
+    // registration writes into e.g. `$alias$.MethodOptions.extensionsBinary`
+    // on that file's module, regardless of the extension field's own type.
+    const FileDescriptor* extended_file = field->containing_type()->file();
+    if (extended_file != file) {
+      referenced_files.insert(std::string(extended_file->name()));
+    }
+    if (field->cpp_type() == FieldDescriptor::CPPTYPE_MESSAGE &&
         !IgnoreMessage(field->message_type())) {
       const FileDescriptor* dep_file = field->message_type()->file();
       if (dep_file != file) {
