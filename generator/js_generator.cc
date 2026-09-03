@@ -3758,13 +3758,16 @@ void Generator::GenerateFile(const GeneratorOptions& options,
     } else {
       printer->Print("var global = globalThis;\n\n");
 
-      for (int i = 0; i < file->dependency_count(); i++) {
-        const std::string name = std::string(file->dependency(i)->name());
+      std::set<std::string> referenced_files =
+          CollectExtendedFiles(options, file);
+      for (std::set<std::string>::iterator it = referenced_files.begin();
+           it != referenced_files.end(); ++it) {
         printer->Print(
             "var $alias$ = require('$file$');\n"
             "goog.object.extend(proto, $alias$);\n",
-            "alias", ModuleAlias(name), "file",
-            GetRootPath(std::string(file->name()), name) + GetJSFilename(options, name));
+            "alias", ModuleAlias(*it), "file",
+            GetRootPath(std::string(file->name()), *it) +
+                GetJSFilename(options, *it));
       }
     }
   } else if (options.import_style == GeneratorOptions::kImportEs6) {
