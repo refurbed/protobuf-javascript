@@ -1997,6 +1997,13 @@ void Generator::FindReferencedFiles(
     if (IgnoreField(field)) {
       continue;
     }
+    // The extended (containing) type's file is always referenced: extension
+    // registration writes into e.g. `$alias$.EnumOptions.extensionsBinary`
+    // on that file's module, regardless of the extension field's own type.
+    const FileDescriptor* extended_file = field->containing_type()->file();
+    if (extended_file != file) {
+      referenced_files->insert(std::string(extended_file->name()));
+    }
     if (field->cpp_type() == FieldDescriptor::CPPTYPE_MESSAGE &&
         !IgnoreMessage(field->message_type())) {
       const FileDescriptor* dep_file = field->message_type()->file();
